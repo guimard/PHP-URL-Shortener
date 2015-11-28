@@ -6,6 +6,7 @@
  */
 
 // db options
+define('DB_TYPE', 'pgsql');
 define('DB_NAME', 'your db name');
 define('DB_USER', 'your db usernae');
 define('DB_PASSWORD', 'your db password');
@@ -13,8 +14,13 @@ define('DB_HOST', 'localhost');
 define('DB_TABLE', 'shortenedurls');
 
 // connect to database
-mysql_connect(DB_HOST, DB_USER, DB_PASSWORD);
-mysql_select_db(DB_NAME);
+try {
+	$dbh = new PDO(DB_TYPE.':host='.DB_HOST.';dbname='.DB_NAME, DB_USER, DB_PASSWORD);
+	$dbh->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+} catch (PDOException $e) {
+	print "Erreur !: " . $e->getMessage() . "<br/>";
+	die();
+}
 
 // base location of script (include trailing slash)
 define('BASE_HREF', 'http://' . $_SERVER['HTTP_HOST'] . '/');

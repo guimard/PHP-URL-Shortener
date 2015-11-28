@@ -34,9 +34,13 @@ if(!empty($url_to_shorten) && preg_match('|^https?://|', $url_to_shorten))
 		}
 		
 	}
+
+	$stmt = $dbh->prepare('SELECT id FROM '.DB_TABLE.' WHERE long_url=?');
 	
 	// check if the URL has already been shortened
-	$already_shortened = mysql_result(mysql_query('SELECT id FROM ' . DB_TABLE. ' WHERE long_url="' . mysql_real_escape_string($url_to_shorten) . '"'), 0, 0);
+	$stmt->execute(array($url_to_shorten));
+	$tmp = $stmt->fetch(PDO::FETCH_NUM);
+	$already_shortened = $tmp[0];
 	if(!empty($already_shortened))
 	{
 		// URL has already been shortened
@@ -45,16 +49,29 @@ if(!empty($url_to_shorten) && preg_match('|^https?://|', $url_to_shorten))
 	else
 	{
 		// URL not in database, insert
-		mysql_query('LOCK TABLES ' . DB_TABLE . ' WRITE;');
-		mysql_query('INSERT INTO ' . DB_TABLE . ' (long_url, created, creator) VALUES ("' . mysql_real_escape_string($url_to_shorten) . '", "' . time() . '", "' . mysql_real_escape_string($_SERVER['REMOTE_ADDR']) . '")');
-		$shortened_url = getShortenedURLFromID(mysql_insert_id());
-		mysql_query('UNLOCK TABLES');
+		try {
+			$dbh->beginTransaction();
+			$stmt2 = $dbh->prepare('INSERT INTO '.DB_TABLE." (long_url, created, creator) VALUES (?,?,?)");
+			$stmt2->execute(array($url_to_shorten, time(), $_SERVER['REMOTE_ADDR']));
+			$stmt->execute(array($url_to_shorten));
+			$tmp = $stmt->fetch(PDO::FETCH_NUM);
+			print_r($tmp);
+			$shortened_url = getShortenedURLFromID($tmp[0]);
+			if(empty($shortend_url)) {
+				die('Insertion ratee');
+			}
+			$dbh->commit();
+		} catch (Exception $e) {
+			$dbh->rollBack();
+			echo "Failed: " . $e->getMessage();
+		}
 	}
 	echo BASE_HREF . $shortened_url;
 }
 
 function getShortenedURLFromID ($integer, $base = ALLOWED_CHARS)
 {
+	$integer += 65536;
 	$length = strlen($base);
 	while($integer > $length - 1)
 	{

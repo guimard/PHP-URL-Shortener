@@ -16,26 +16,49 @@ require('config.php');
 
 $shortened_id = getIDFromShortenedURL($_GET['url']);
 
+try {
+	$stmt = $dbh->prepare('SELECT long_url FROM '.DB_TABLE." WHERE id=?");
+	$stmt->execute(array($shortened_id));
+	$tmp = $stmt->fetch(PDO::FETCH_NUM);
+	$long_url = $tmp[0];
+} catch (Exception $e) {
+	echo "Failed " . $e->getMessage();
+	exit;
+}
+
 if(CACHE)
 {
 	$long_url = file_get_contents(CACHE_DIR . $shortened_id);
 	if(empty($long_url) || !preg_match('|^https?://|', $long_url))
 	{
-		$long_url = mysql_result(mysql_query('SELECT long_url FROM ' . DB_TABLE . ' WHERE id="' . mysql_real_escape_string($shortened_id) . '"'), 0, 0);
-		@mkdir(CACHE_DIR, 0777);
-		$handle = fopen(CACHE_DIR . $shortened_id, 'w+');
-		fwrite($handle, $long_url);
-		fclose($handle);
+		try {
+			$stmt->execute(array($shortened_id));
+			$tmp = $stmt->fetch(PDO::FETCH_NUM);
+			$long_url = $tmp[0];
+			@mkdir(CACHE_DIR, 0777);
+			$handle = fopen(CACHE_DIR . $shortened_id, 'w+');
+			fwrite($handle, $long_url);
+			fclose($handle);
+		} catch (Exception $e) {
+			echo "Failed " . $e->getMessage();
+			exit;
+		}
 	}
 }
 else
 {
-	$long_url = mysql_result(mysql_query('SELECT long_url FROM ' . DB_TABLE . ' WHERE id="' . mysql_real_escape_string($shortened_id) . '"'), 0, 0);
+	try {
+		$stmt->execute(array($shortened_id));
+		$tmp = $stmt->fetch(PDO::FETCH_NUM);
+		$long_url = $tmp[0];
+	} catch (Exception $e) {
+		echo "Failed " . $e->getMessage();
+	}
 }
 
 if(TRACK)
 {
-	mysql_query('UPDATE ' . DB_TABLE . ' SET referrals=referrals+1 WHERE id="' . mysql_real_escape_string($shortened_id) . '"');
+	$dbh->query('UPDATE ' . DB_TABLE . ' SET referrals=referrals+1 WHERE id="' . pg_escape_string($shortened_id) . '"');
 }
 
 header('HTTP/1.1 301 Moved Permanently');
@@ -52,5 +75,6 @@ function getIDFromShortenedURL ($string, $base = ALLOWED_CHARS)
 	{
 		$out += strpos($base, $char) * pow($length, $size - $i);
 	}
+	$out -= 65536;
 	return $out;
 }
